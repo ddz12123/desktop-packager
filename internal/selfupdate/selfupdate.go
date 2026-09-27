@@ -21,6 +21,9 @@ import (
 // releasesAPI 最新版本查询接口
 const releasesAPI = "https://api.github.com/repos/ddz12123/desktop-packager/releases/latest"
 
+// releasesDownloadPrefix 官方发布产物的下载地址前缀，Apply 用它做第一道校验
+const releasesDownloadPrefix = "https://github.com/ddz12123/desktop-packager/releases/download/"
+
 // Info 检查更新的结果
 type Info struct {
 	HasUpdate      bool   `json:"hasUpdate"`
@@ -118,13 +121,16 @@ func fetchLatest() (*Info, error) {
 }
 
 // Apply 下载新版本到 exe 同目录的临时文件，生成更新脚本并返回脚本路径。
-// 下载地址会与最新 Release 的资源比对，防止从任意地址下载。
+// 下载地址先校验前缀、再与最新 Release 的资源精确比对，防止从任意地址下载。
 func Apply(ctx context.Context, downloadURL, exePath string) (string, error) {
+	if !strings.HasPrefix(downloadURL, releasesDownloadPrefix) {
+		return "", fmt.Errorf("下载地址无效，请重新检查更新")
+	}
 	info, err := fetchLatest()
 	if err != nil {
 		return "", err
 	}
-	if downloadURL == "" || downloadURL != info.DownloadURL {
+	if downloadURL != info.DownloadURL {
 		return "", fmt.Errorf("下载地址无效，请重新检查更新")
 	}
 

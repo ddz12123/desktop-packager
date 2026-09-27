@@ -3,8 +3,8 @@
     "internal/nginxproxy/path.go": "0c653de7f7736bf57734b2834b85f85d391048025363ac46d35a0a78a36b6309",
     "internal/resourcefs/resourcefs.go": "571925475d90c669de16a7d546e80b16184639da940eac7be85a25c21d76ef7c",
     "templates/generated-app/app.go.tmpl": "ec2dbe3f68c58d34ce6047c4c73637bc1eec639fd82aa24d24735cd8f711a1fc",
-    "templates/generated-app/error_windows.go.tmpl": "266f09ee2eec05f5cec2f64d1dd3220ea228ca5ed4a973a56480a89bb4af1ca3",
-    "templates/generated-app/go.mod.tmpl": "8ec1a82aa5ecebcb29b2e1e759d1a356886e7f804fa2d0bdfbe99457fec83c72",
+    "templates/generated-app/error_windows.go.tmpl": "d07090dbf110765b52db43ba4fd494d776f7b4440274fa1d579767bdf8d4ccf9",
+    "templates/generated-app/go.mod.tmpl": "0a2e2d8175e5249c9e40abdd4400e9e92c2c8df0642683717fba22c569ed590f",
     "templates/generated-app/loader.go.tmpl": "1a66d5e16119287042183f9029dce19c8d9627cbb30e7f23e5e4640dc7eb6222",
     "templates/generated-app/main.go.tmpl": "c98e58741582ac9174513b3842e7c433cfb81c41858b907b0047b6d8c6d21beb",
     "templates/generated-app/proxy.go.tmpl": "a2d849d5989e5b3058f2a23e3ecd4bd42ad4243a39a87e62b694fda80b83130f"

@@ -177,6 +177,8 @@ func main() {
 
 // writeBaseShellVersion 计算参与运行壳编译的源文件哈希并写入 base_version.txt。
 // 打包工具构建时会用嵌入的这份清单与当前源文件比对，检测 base.exe 是否过期。
+// 哈希前将 CRLF 归一化为 LF：不同平台的 git checkout 换行符策略不同，
+// 否则同一份代码在 CI 上会算出不同哈希，造成漂移误报。
 func writeBaseShellVersion(projectRoot string) error {
 	files := make(map[string]string, len(shellinfo.SourceFiles))
 	for _, rel := range shellinfo.SourceFiles {
@@ -184,8 +186,7 @@ func writeBaseShellVersion(projectRoot string) error {
 		if err != nil {
 			return fmt.Errorf("读取 %s 失败: %w", rel, err)
 		}
-		sum := sha256.Sum256(data)
-		files[rel] = hex.EncodeToString(sum[:])
+		files[rel] = hashContent(data)
 	}
 	data, err := json.MarshalIndent(shellinfo.Manifest{Files: files}, "", "  ")
 	if err != nil {
@@ -193,6 +194,13 @@ func writeBaseShellVersion(projectRoot string) error {
 	}
 	data = append(data, '\n')
 	return os.WriteFile(filepath.Join(projectRoot, "templates", "base", "base_version.txt"), data, 0644)
+}
+
+// hashContent 计算 SHA256，哈希前归一化换行符（与 assets.go 的 computeShellHashes 保持一致）
+func hashContent(data []byte) string {
+	data = bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }
 
 // renderTemplate 渲染模板文件并写入输出文件

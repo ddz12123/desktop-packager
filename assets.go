@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
@@ -40,6 +41,7 @@ func buildOptions() (buildkit.Options, error) {
 
 // computeShellHashes 计算当前参与运行壳编译的全部源文件哈希。
 // 清单以 internal/shellinfo.SourceFiles 为唯一来源，与 cmd/build-base 共用。
+// 哈希前归一化 CRLF 为 LF，保证不同平台 checkout 出的文件算出相同哈希。
 func computeShellHashes() (map[string]string, error) {
 	hashes := make(map[string]string, len(shellinfo.SourceFiles))
 	for _, name := range shellinfo.SourceFiles {
@@ -53,6 +55,7 @@ func computeShellHashes() (map[string]string, error) {
 		if err != nil {
 			return nil, err
 		}
+		data = bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
 		sum := sha256.Sum256(data)
 		hashes[name] = hex.EncodeToString(sum[:])
 	}
