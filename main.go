@@ -21,7 +21,7 @@ var assets embed.FS
 
 // appVersion 是打包工具自身的版本号，发布新版本时需与 git 标签保持一致
 // （release 工作流会校验两者一致）。
-const appVersion = "1.0.1"
+const appVersion = "1.0.2"
 
 func main() {
 	// CLI 模式：deploy-app build --config profile.json [--out out.exe]

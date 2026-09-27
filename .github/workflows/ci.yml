@@ -55,3 +55,11 @@ jobs:
             echo "::error::模板或共享源码已修改但 templates/base/base.exe 未重新生成，请本地执行: go run ./cmd/build-base"
             exit 1
           fi
+      - name: 校验安装包脚本（NSIS）
+        shell: bash
+        run: |
+          MS="$(command -v makensis || echo '/c/Program Files (x86)/NSIS/makensis.exe')"
+          DUMMY_EXE_WIN="$(cygpath -w /tmp/dummy-deploy-app.exe)"
+          DUMMY_OUT_WIN="$(cygpath -w /tmp/dummy-deploy-app-setup.exe)"
+          printf 'MZ' > /tmp/dummy-deploy-app.exe
+          "$MS" -V2 -DVERSION=0.0.0 -DEXE="$DUMMY_EXE_WIN" -DOUT="$DUMMY_OUT_WIN" packaging/deploy-app.nsi

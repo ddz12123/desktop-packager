@@ -47,6 +47,15 @@ func CompareVersions(a, b string) int {
 	return 0
 }
 
+// isPortableAssetName 判断 Release 资源是否为绿色版主程序
+// （排除安装版 -setup.exe：在线更新只能用绿色 exe 做替换包）。
+func isPortableAssetName(name string) bool {
+	n := strings.ToLower(name)
+	return strings.HasPrefix(n, "deploy-app-v") &&
+		strings.HasSuffix(n, ".exe") &&
+		!strings.Contains(n, "-setup")
+}
+
 func splitVersion(v string) [4]int {
 	var out [4]int
 	v = strings.TrimPrefix(strings.TrimSpace(strings.ToLower(v)), "v")
@@ -108,8 +117,7 @@ func fetchLatest() (*Info, error) {
 		NotesURL:      release.HTMLURL,
 	}
 	for _, a := range release.Assets {
-		name := strings.ToLower(a.Name)
-		if strings.HasPrefix(name, "deploy-app-v") && strings.HasSuffix(name, ".exe") {
+		if isPortableAssetName(a.Name) {
 			info.DownloadURL = a.BrowserDownloadURL
 			break
 		}

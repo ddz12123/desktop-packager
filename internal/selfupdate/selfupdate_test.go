@@ -63,6 +63,30 @@ func TestSplitVersionIgnoresGarbage(t *testing.T) {
 	}
 }
 
+func TestIsPortableAssetName(t *testing.T) {
+	yes := []string{
+		"deploy-app-v1.0.1.exe",
+		"deploy-app-v1.2.3.exe",
+		"Deploy-App-V1.0.1.EXE",
+	}
+	no := []string{
+		"deploy-app-v1.0.1-setup.exe", // 安装版不能作为在线更新替换包
+		"deploy-app-v1.0.1.zip",
+		"checksums.txt",
+		"other-v1.0.0.exe",
+	}
+	for _, name := range yes {
+		if !isPortableAssetName(name) {
+			t.Errorf("expected %q to be portable asset", name)
+		}
+	}
+	for _, name := range no {
+		if isPortableAssetName(name) {
+			t.Errorf("expected %q NOT to be portable asset", name)
+		}
+	}
+}
+
 // TestApplyRejectsForeignURL 不发网络请求：直接验证 Apply 的地址校验分支。
 // 通过构造一个必然不匹配的地址让其在 fetchLatest 之前/之后被拒。
 func TestApplyRejectsForeignURL(t *testing.T) {

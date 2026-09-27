@@ -63,7 +63,9 @@ Deploy App 是一个基于 Wails 的 Windows 桌面应用打包工具。它可�
 
 ### 使用发布版本
 
-1. 从 GitHub Releases 下载最新的 `deploy-app.exe`。
+1. 从 GitHub Releases 下载发行包，两种形式任选：
+   - **绿色版** `deploy-app-vX.Y.Z.exe`：下载即用；
+   - **安装版** `deploy-app-vX.Y.Z-setup.exe`：自动创建快捷方式、自带卸载器（用户级安装，无需管理员权限）。
 2. 双击运行。
 3. 导入前端项目的 `dist` 目录，或上传包含构建产物的 ZIP 包。
 4. 设置应用名称、图标、窗口大小和代理规则。
