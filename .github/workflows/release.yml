@@ -56,10 +56,14 @@ jobs:
           mkdir -p dist-release
           cp build/bin/deploy-app.exe "dist-release/deploy-app-v${VERSION}.exe"
 
+      - name: 安装 NSIS
+        run: choco install nsis -y --no-progress
+
       - name: 打包安装版（NSIS）
         shell: bash
         run: |
-          MS="$(command -v makensis || echo '/c/Program Files (x86)/NSIS/makensis.exe')"
+          MS="$(command -v makensis || echo 'C:/Program Files (x86)/NSIS/makensis.exe')"
+          echo "makensis: $MS"
           VERSION="${GITHUB_REF_NAME#v}"
           EXE_WIN="$(cygpath -w build/bin/deploy-app.exe)"
           OUT_WIN="$(cygpath -w "dist-release/deploy-app-v${VERSION}-setup.exe")"
