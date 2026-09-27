@@ -2,7 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 
+	"github.com/wailsapp/wails/v2/pkg/options"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -12,6 +17,7 @@ type App struct {
 	fullscreen          bool
 	maximized           bool
 	confirmCloseEnabled bool
+	rememberWindow      bool
 }
 
 // NewApp creates a new App application struct
@@ -24,15 +30,31 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	if a.fullscreen {
 		wailsRuntime.WindowFullscreen(a.ctx)
-	} else if a.maximized {
-		wailsRuntime.WindowMaximise(a.ctx)
+		return
 	}
+	if a.maximized {
+		wailsRuntime.WindowMaximise(a.ctx)
+		return
+	}
+	if a.rememberWindow {
+		a.restoreWindowState()
+	}
+}
+
+// onSecondInstanceLaunch 再次启动同一应用时，把已有窗口带回前台
+func (a *App) onSecondInstanceLaunch(data options.SecondInstanceData) {
+	if a.ctx == nil {
+		return
+	}
+	wailsRuntime.WindowUnminimise(a.ctx)
+	wailsRuntime.WindowShow(a.ctx)
 }
 
 // confirmClose shows a native confirmation dialog before closing.
 // Returns true to prevent close, false to allow close.
 func (a *App) confirmClose(ctx context.Context) bool {
 	if !a.confirmCloseEnabled {
+		a.persistWindowState()
 		return false
 	}
 	result, err := wailsRuntime.MessageDialog(ctx, wailsRuntime.MessageDialogOptions{
@@ -42,7 +64,86 @@ func (a *App) confirmClose(ctx context.Context) bool {
 	})
 	// Dialog failure should not trap the user in the window.
 	if err != nil {
+		a.persistWindowState()
 		return false
 	}
-	return result != "Yes" && result != "Ok" && result != "OK"
+	if result == "Yes" || result == "Ok" || result == "OK" {
+		a.persistWindowState()
+		return false
+	}
+	return true
+}
+
+// windowState 描述持久化的窗口几何信息
+type windowState struct {
+	X         int  `json:"x"`
+	Y         int  `json:"y"`
+	Width     int  `json:"width"`
+	Height    int  `json:"height"`
+	Maximized bool `json:"maximized"`
+}
+
+// windowStatePath 窗口状态保存位置：%AppData%/<应用名>/window_state.json
+func (a *App) windowStatePath() string {
+	exePath, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	name := strings.TrimSuffix(filepath.Base(exePath), filepath.Ext(exePath))
+	base, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(base, name, "window_state.json")
+}
+
+// persistWindowState 关闭前保存窗口几何信息（全屏状态跳过）
+func (a *App) persistWindowState() {
+	if !a.rememberWindow || a.ctx == nil {
+		return
+	}
+	path := a.windowStatePath()
+	if path == "" {
+		return
+	}
+	if wailsRuntime.WindowIsFullscreen(a.ctx) {
+		return
+	}
+	state := windowState{Maximized: wailsRuntime.WindowIsMaximised(a.ctx)}
+	if !state.Maximized {
+		state.X, state.Y = wailsRuntime.WindowGetPosition(a.ctx)
+		state.Width, state.Height = wailsRuntime.WindowGetSize(a.ctx)
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return
+	}
+	_ = os.WriteFile(path, data, 0644)
+}
+
+// restoreWindowState 启动时恢复上次窗口几何信息
+func (a *App) restoreWindowState() {
+	path := a.windowStatePath()
+	if path == "" {
+		return
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var state windowState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return
+	}
+	if state.Maximized {
+		wailsRuntime.WindowMaximise(a.ctx)
+		return
+	}
+	if state.Width >= 400 && state.Height >= 300 {
+		wailsRuntime.WindowSetSize(a.ctx, state.Width, state.Height)
+	}
+	wailsRuntime.WindowSetPosition(a.ctx, state.X, state.Y)
 }

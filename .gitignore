@@ -1,8 +1,9 @@
 # Build output
 build/bin/
 
-# Frontend
-frontend/dist/
+# Frontend (keep .gitkeep so go:embed compiles before the first frontend build)
+frontend/dist/*
+!frontend/dist/.gitkeep
 frontend/node_modules/
 
 # Go binaries (keep prebuilt base shell)
@@ -61,3 +62,4 @@ copilotignore
 .aide/
 .antigravity/
 .agents/
+.mimosa/

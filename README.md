@@ -9,6 +9,8 @@ Deploy App 是一个基于 Wails 的 Windows 桌面应用打包工具。它可�
 
 这个项目的目标很直接：让前端应用在不改业务代码的情况下，快速生成一个可分发的 Windows 桌面程序。
 
+> 👉 **新用户请先阅读《[使用说明](使用说明.md)》**：三分钟上手、各步骤详解、方案管理与常见问题。
+
 ## 界面预览
 
 ### 导入构建产物
@@ -37,7 +39,18 @@ Deploy App 是一个基于 Wails 的 Windows 桌面应用打包工具。它可�
 - 反向代理：内置与 nginx `location` + `proxy_pass` 对齐的路径语义，适合接口跨域或本地服务转发。
 - SPA 路由回退：前端 History 路由刷新未知路径时回退到 `index.html`。
 - 静态资源嵌入：前端 `dist` 文件会被打进 exe 内部，运行时自动加载。
-- ZIP 导入：支持直接选择 `dist` 文件夹，也支持上传构建产物 ZIP 包（带 Zip Slip 防护与临时目录清理）。
+- ZIP 导入：支持直接选择 `dist` 文件夹、上传构建产物 ZIP 包，或把文件夹/ZIP **直接拖入窗口**（带 Zip Slip 防护、解压上限与临时目录清理）。
+- 导入即建议应用名：自动读取 dist 同级 `package.json` 的 name 字段预填应用名。
+- 代理连通性测试：配置代理规则时可一键测试目标地址是否可达。
+- 构建可控：构建前选择保存位置，构建过程中可随时取消。
+- 运行壳一致性校验：`base.exe` 附带源文件哈希清单，模板变更后未重新生成会直接报错提示。
+- 配置持久化与方案管理：自动记住上次配置；可把整套构建配置保存为命名方案，支持载入、删除、导出、导入，方便团队复用。
+- 生成应用增强：单实例锁（重复启动唤起已有窗口）、记住窗口位置/大小、窗口标题独立于 exe 文件名。
+- 外置配置覆盖：生成应用支持 exe 同目录 `app_config.json` / `proxy_config.json` 覆盖内置配置，改代理目标无需重新打包。
+- 代码签名：构建后生成签名脚本（自动定位 signtool），证书密码运行时输入、不落盘。
+- 试运行：构建完成后可一键启动生成的 exe 做冒烟测试。
+- CLI 模式：`deploy-app build --config 方案.json` 无界面打包，可接入 CI 流水线。
+- 检查更新与在线更新：设置面板一键检查 GitHub Releases 最新版本，支持自动下载替换重启。
 
 ## 适用场景
 
@@ -80,7 +93,7 @@ dist.zip
 ### 环境要求
 
 - Windows 10/11 64-bit
-- Go 1.23+
+- Go 1.24+
 - Node.js 20+
 - Wails CLI v2
 
@@ -108,7 +121,7 @@ cd ..
 
 ### 重新生成基础运行壳（重要）
 
-修改 `templates/generated-app/` 后，必须重新生成基础 exe，否则打包工具仍会使用旧壳：
+修改 `templates/generated-app/` 下的模板，或修改 `internal/nginxproxy/`、`internal/resourcefs/` 中与运行壳共享的实现后，必须重新生成基础 exe，否则打包工具会直接报错提示漂移：
 
 ```bash
 go run ./cmd/build-base
@@ -118,6 +131,7 @@ go run ./cmd/build-base
 
 ```text
 templates/base/base.exe
+templates/base/base_version.txt   # 源文件 SHA256 清单，由工具生成，请勿手改
 ```
 
 > 注意：仓库中的 `templates/base/base.exe` 需要是真实可运行的 Wails 壳。如果只有占位文件，请先执行上面的命令生成。
@@ -151,8 +165,9 @@ build/bin/deploy-app.exe
 | 描述 | 可选，写入文件说明（FileDescription） |
 | 公司/组织 | 可选，写入公司名，并生成详细信息中的版权（LegalCopyright） |
 | 图标 | `.ico` 或正方形 `.png`（建议 ≥256） |
-| 窗口 | 宽高 / 最大化 / 全屏 |
-| 关闭前确认 | 生成应用退出时是否弹确认框 |
+| 窗口标题 | 可选，留空则使用应用名称 |
+| 窗口 | 宽高 / 最大化 / 全屏 / 关闭前确认 / 单实例锁 / 记住窗口位置 |
+| 代码签名 | 可选 PFX 证书与 RFC3161 时间戳服务器，构建后在输出 exe 旁生成同名 `-sign.cmd` 签名脚本 |
 
 ### 3. 配置反向代理（与 nginx 对齐）
 
@@ -208,12 +223,62 @@ location <路径前缀> {
 
 ### 4. 构建生成
 
-确认配置后点击“开始构建”，工具会：
+确认配置后，先点击“选择保存位置”指定输出路径，再点击“开始构建”，工具会：
 
 1. 复制基础运行壳 `base.exe`
 2. 写入图标与版本资源
 3. 追加资源 zip（`dist/` + `proxy_config.json` + `app_config.json`）与 footer
-4. 弹出保存对话框输出最终 exe
+4. 写入到已选择的输出路径
+5. 配置了签名证书时，在输出 exe 旁生成同名 `-sign.cmd` 签名脚本
+
+构建过程中可以点击“取消构建”中止，已产生的临时文件会自动清理。构建成功后可点击“试运行”直接启动生成的 exe 做冒烟测试。
+
+## 配置持久化与构建方案
+
+- **自动记忆**：界面上修改配置会自动保存到 `%AppData%\deploy-app\last_config.json`，下次启动自动恢复（导入目录、图标路径会重新校验，失效则清空）。
+- **命名方案**：在“全局配置 → 构建方案”中可把当前配置保存为命名方案，之后一键载入；支持导出为 JSON 文件分享给团队，或从文件导入。
+- 方案内容涵盖全部构建配置（导入目录、应用配置、代理规则、签名等）。**证书密码不在保存范围内**，签名脚本在运行时才输入密码。
+
+## 生成应用的外置配置
+
+生成应用启动时，会优先读取 exe 同目录下的外置配置，存在且为合法 JSON 时覆盖内置配置：
+
+| 文件 | 作用 |
+| --- | --- |
+| `app_config.json` | 覆盖窗口参数（宽高、标题、全屏、关闭确认、单实例、记住窗口等） |
+| `proxy_config.json` | 覆盖全部反向代理规则 |
+
+示例——不发版修改代理目标：
+
+```json
+{
+  "rules": [
+    { "path": "/api/", "target": "http://192.168.1.100:8080/", "rewrite": "", "enabled": true }
+  ]
+}
+```
+
+文件不存在或内容不是合法 JSON 时，自动回退到打包时内置的配置，因此删掉外置文件即可恢复默认行为。
+
+## 命令行构建（CI 集成）
+
+界面“导出方案”得到的 JSON 即为 CLI 配置文件，命令行无界面打包：
+
+```bash
+deploy-app build --config 方案.json [--out 输出路径.exe]
+```
+
+- `--config` 必填；`--out` 可选，覆盖方案中的输出路径。
+- 退出码：成功 `0`，失败 `1`，进度打印到控制台。
+- 可嵌入 GitHub Actions / Jenkins 等流水线，实现前端构建后自动打包。
+
+## 平台支持
+
+当前只支持 Windows 10/11 64-bit（base.exe 以 `GOOS=windows GOARCH=amd64` 预编译，签名、窗口状态等能力均基于 Windows API）。未来若需拓展其他平台，主要工作包括：
+
+1. 分别准备对应平台的预编译运行壳（`cmd/build-base` 增加目标平台矩阵），`base_version.txt` 哈希清单机制可直接复用；
+2. 调整资源嵌入方式——macOS 向 Mach-O 追加数据会破坏代码签名，需要改为外挂资源包等方案；
+3. `internal/nginxproxy`、`internal/resourcefs`、`internal/shellinfo` 均为纯标准库实现，与平台无关，可直接复用。
 
 ## 工作原理
 
@@ -238,31 +303,55 @@ footer
 
 ```text
 .
-├── app.go                    # Wails 后端绑定方法
-├── builder.go                # 打包流程、资源追加、图标/版本修补
-├── config.go                 # 构建配置结构
-├── validate.go               # 应用名 / 代理规则 / 构建配置校验
-├── main.go                   # Deploy App 入口
-├── internal/nginxproxy/      # 与生成壳共用的 nginx 路径算法
+├── app.go                    # Wails 绑定适配层（薄）
+├── assets.go                 # 运行壳嵌入资产 + 源文件哈希计算
+├── main.go                   # 入口：GUI 装配 + CLI 模式
+├── extract_zip_test.go       # ZIP 导入测试
+├── shell_assets_test.go      # 运行壳与模板一致性测试
+├── internal/
+│   ├── appconf/              # 构建配置结构、校验、运行时配置生成
+│   ├── buildkit/             # 打包管线（build/resource/icon/sign），不依赖 Wails
+│   ├── settings/             # 配置持久化与构建方案管理
+│   ├── nginxproxy/           # 与生成壳共用的 nginx 路径算法
+│   ├── resourcefs/           # 与生成壳共用的 zip FS 与 SPA 回退实现
+│   └── shellinfo/            # 运行壳源文件清单（build-base 与打包工具共用）
 ├── cmd/build-base/           # 生成基础运行壳的工具
 ├── frontend/                 # Vue 前端界面
-├── templates/base/           # 预编译基础 exe（gitignore 例外保留）
+│   └── src/components/GlobalPanels.vue  # 构建方案 / 设置 / 拖拽导入等全局面板
+├── templates/base/           # 预编译基础 exe + 哈希清单（gitignore 例外保留）
 ├── templates/generated-app/  # 基础运行壳源码模板
+├── .github/workflows/        # CI（测试、前端构建、base.exe 一致性）
 └── assets/img/               # README 截图资源
 ```
 
+### 架构分层
+
+- **根包（main）只做装配**：Wails 选项、绑定适配、嵌入资产注入，不含业务逻辑。
+- **internal/buildkit** 是打包管线核心，不依赖 Wails：进度通过回调上报、取消通过 context 传递，GUI 与 CLI 共用同一实现。
+- **internal/appconf** 承载配置结构与全部校验；**internal/settings** 承载持久化与方案管理；两者均可独立测试。
+- **internal/nginxproxy、resourcefs、shellinfo** 为纯标准库实现，与平台无关，由 build-base 自动同步进生成壳。
+
 ## 开发注意
 
-- 修改 `templates/generated-app/*.tmpl` 后必须执行 `go run ./cmd/build-base`。
+- 修改 `templates/generated-app/*.tmpl` 或 `internal/nginxproxy`、`internal/resourcefs` 后必须执行 `go run ./cmd/build-base`。
 - `templates/base/base.exe` 在 `.gitignore` 中通过 `!templates/base/base.exe` 例外保留，避免被 `*.exe` 规则忽略。
-- `internal/nginxproxy` 与 `templates/generated-app/proxy.go.tmpl` 中的路径算法需保持同步。
-- 前端步骤有前置校验：未导入 dist / 应用名非法时不能跳步构建。
+- `cmd/build-base` 会把 `internal/nginxproxy/path.go` 与 `internal/resourcefs/resourcefs.go` 自动复制进生成壳（仅替换 package 声明），无需手动同步代码；打包工具构建时还会比对 `base_version.txt` 中的哈希，检测“改了模板但没重新生成 base.exe”的漂移。
+- 主工程的 `go vet` / `go test` 依赖 `frontend/dist` 目录存在，仓库保留了 `frontend/dist/.gitkeep` 占位，正常构建前端后 vite 会自动补回该文件。
+- 前端步骤有前置校验：未导入 dist / 未选择保存位置 / 应用名非法时不能开始构建。
 
 ## 常见问题
 
 ### 生成的 exe 打开后提示“加载资源失败”
 
 通常是 exe 被损坏、被二次修改，构建过程没有完整写入资源，或 `base.exe` 仍是占位文件。请先 `go run ./cmd/build-base`，再重新构建。
+
+### 打包工具提示“base.exe 已过期/漂移”
+
+说明 `templates/generated-app` 模板或 `internal/nginxproxy`、`internal/resourcefs` 共享源码在 base.exe 生成之后被修改过。执行 `go run ./cmd/build-base` 重新生成运行壳即可。
+
+### 签名后杀毒软件仍报警告
+
+签名解决的是“发布者身份可信”问题；SmartScreen 还需要证书具备一定声誉积累。自签名或新证书初期仍可能被提示，属正常现象。生成应用的代理不生效但配置无误时，可尝试在 exe 同目录放置外置 `proxy_config.json` 验证是否为内置配置问题。
 
 ### 反向代理不生效
 
@@ -294,8 +383,8 @@ footer
 - 优先保持实现简单直接。
 - UI 交互以清晰、稳定、可重复操作为主。
 - 新功能尽量补充 README 或界面说明。
-- 修改模板后请重新运行 `go run ./cmd/build-base`。
-- 路径代理逻辑变更时，同步更新 `internal/nginxproxy` 与 `proxy.go.tmpl`，并补充测试用例。
+- 修改模板或共享 internal 包后请重新运行 `go run ./cmd/build-base`。
+- 路径代理逻辑变更时，只需修改 `internal/nginxproxy`（生成壳通过 build-base 自动同步），并补充测试用例。
 
 ## 许可证
 

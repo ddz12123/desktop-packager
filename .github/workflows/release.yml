@@ -1,0 +1,63 @@
+name: Release
+
+# 推送版本标签（如 v1.0.0）时自动构建 Windows 版并发布到 GitHub Releases
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: 构建 Windows 版并发布
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 安装前端依赖
+        working-directory: frontend
+        run: npm ci
+
+      - name: 构建前端
+        working-directory: frontend
+        run: npm run build
+
+      - name: 安装 Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+
+      - name: 校验版本号与标签一致
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! grep -q "appVersion = \"${VERSION}\"" main.go; then
+            echo "::error::main.go 中的 appVersion 与标签 v${VERSION} 不一致，请修改后重新打标签"
+            exit 1
+          fi
+
+      - name: 构建 Windows 应用
+        run: wails build -s
+
+      - name: 整理发布产物
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p dist-release
+          cp build/bin/deploy-app.exe "dist-release/deploy-app-v${VERSION}.exe"
+
+      - name: 发布到 GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-release/*.exe
+          generate_release_notes: true

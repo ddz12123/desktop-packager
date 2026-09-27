@@ -1,11 +1,14 @@
 <script lang="ts" setup>
 import {ref} from 'vue'
-import {NCard, NButton, NSpace, NInput, NSwitch, NEmpty, NAlert, NTooltip} from 'naive-ui'
+import {NCard, NButton, NSpace, NInput, NSwitch, NEmpty, NAlert, NTooltip, useMessage} from 'naive-ui'
 import {useStore} from '../store'
 import {validateProxyRule} from '../validation'
+import {TestProxyTarget} from '../../wailsjs/go/main/App'
 
 const store = useStore()
+const message = useMessage()
 const error = ref('')
+const testing = ref<Record<number, boolean>>({})
 
 function addRule() {
   store.addProxyRule()
@@ -13,6 +16,25 @@ function addRule() {
 
 function removeRule(index: number) {
   store.removeProxyRule(index)
+}
+
+async function testRule(index: number) {
+  const rule = store.state.proxyRules[index]
+  const target = (rule.target || '').trim()
+  if (!target) {
+    message.warning('请先填写目标地址')
+    return
+  }
+  error.value = ''
+  testing.value[index] = true
+  try {
+    const status = await TestProxyTarget(target)
+    message.success(`规则 #${index + 1} 连通正常（${status}）`)
+  } catch (e: any) {
+    message.error(`规则 #${index + 1} 连接失败：${e?.message || String(e)}`)
+  } finally {
+    testing.value[index] = false
+  }
 }
 
 function prevStep() {
@@ -105,9 +127,14 @@ function nextStep() {
             />
           </div>
           <div class="col-action">
-            <NButton text type="error" @click="removeRule(index)" size="small">
-              删除
-            </NButton>
+            <NSpace :size="4" :wrap="false">
+              <NButton text type="primary" size="small" :loading="testing[index]" @click="testRule(index)">
+                测试
+              </NButton>
+              <NButton text type="error" size="small" @click="removeRule(index)">
+                删除
+              </NButton>
+            </NSpace>
           </div>
         </div>
 
@@ -185,7 +212,7 @@ function nextStep() {
 .col-target { flex: 2; }
 .col-rewrite { flex: 1.2; }
 .col-enabled { width: 50px; text-align: center; }
-.col-action { width: 50px; text-align: center; }
+.col-action { width: 92px; text-align: center; }
 .add-rule {
   padding: 12px 0;
 }

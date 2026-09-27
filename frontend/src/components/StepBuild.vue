@@ -1,32 +1,32 @@
 <script lang="ts" setup>
-import {onMounted, onUnmounted, ref} from 'vue'
+import {computed, ref} from 'vue'
 import {NCard, NButton, NSpace, NProgress, NAlert, NResult, NSpin, useMessage} from 'naive-ui'
 import {useStore} from '../store'
-import {isValidAppName} from '../validation'
-import {BuildApp, OpenOutputFolder} from '../../wailsjs/go/main/App'
-import {EventsOn} from '../../wailsjs/runtime/runtime'
-import {main} from '../../wailsjs/go/models'
+import {appNameError} from '../validation'
+import {BuildApp, CancelBuild, OpenOutputFolder, RunOutput, SelectOutputPath} from '../../wailsjs/go/main/App'
+import {appconf} from '../../wailsjs/go/models'
 
 const store = useStore()
 const message = useMessage()
 const openError = ref('')
+const canceling = ref(false)
 
-let unlistenProgress: (() => void) | null = null
-let unlistenComplete: (() => void) | null = null
-
-onMounted(() => {
-  unlistenProgress = EventsOn('build:progress', (data: any) => {
-    store.setBuildProgress(data.step, data.progress)
-  })
-  unlistenComplete = EventsOn('build:complete', (data: any) => {
-    store.setBuildComplete(data.outputPath)
-  })
+const canBuild = computed(() => {
+  return !!store.state.distPath
+    && !!store.state.savePath
+    && !appNameError(store.state.appName)
 })
 
-onUnmounted(() => {
-  unlistenProgress?.()
-  unlistenComplete?.()
-})
+async function selectSavePath() {
+  openError.value = ''
+  try {
+    const path = await SelectOutputPath(store.state.appName.trim() || 'app')
+    if (!path) return
+    store.setSavePath(path)
+  } catch (e: any) {
+    openError.value = e?.message || String(e)
+  }
+}
 
 async function startBuild() {
   openError.value = ''
@@ -34,18 +34,23 @@ async function startBuild() {
     store.setBuildError('请先导入前端构建产物')
     return
   }
-  const nameErr = isValidAppName(store.state.appName)
+  const nameErr = appNameError(store.state.appName)
   if (nameErr) {
     store.setBuildError(nameErr)
+    return
+  }
+  if (!store.state.savePath) {
+    store.setBuildError('请先选择保存位置')
     return
   }
 
   store.setBuilding(true)
   try {
-    await BuildApp(main.BuildConfig.createFrom({
+    await BuildApp(appconf.BuildConfig.createFrom({
       appName: store.state.appName.trim(),
       iconPath: store.state.iconPath,
       distPath: store.state.distPath,
+      outputPath: store.state.savePath,
       tempPath: store.state.tempPath,
       proxyRules: store.state.proxyRules.map((r) => ({...r})),
       windowWidth: store.state.windowWidth,
@@ -56,9 +61,27 @@ async function startBuild() {
       version: store.state.version,
       description: store.state.description,
       company: store.state.company,
+      windowTitle: store.state.windowTitle,
+      singleInstance: store.state.singleInstance,
+      rememberWindow: store.state.rememberWindow,
+      targetPlatform: store.state.targetPlatform,
+      signPfxPath: store.state.signPfxPath,
+      signTimestamp: store.state.signTimestamp,
     }))
   } catch (e: any) {
     store.setBuildError(e?.message || String(e))
+  }
+}
+
+async function cancelBuild() {
+  openError.value = ''
+  try {
+    canceling.value = true
+    await CancelBuild()
+  } catch (e: any) {
+    openError.value = e?.message || String(e)
+  } finally {
+    canceling.value = false
   }
 }
 
@@ -67,6 +90,17 @@ async function openOutput() {
   if (!store.state.outputPath) return
   try {
     await OpenOutputFolder(store.state.outputPath)
+  } catch (e: any) {
+    openError.value = e?.message || String(e)
+    message.error(openError.value)
+  }
+}
+
+async function runOutput() {
+  openError.value = ''
+  if (!store.state.outputPath) return
+  try {
+    await RunOutput(store.state.outputPath)
   } catch (e: any) {
     openError.value = e?.message || String(e)
     message.error(openError.value)
@@ -108,6 +142,10 @@ function prevStep() {
           <span class="value">{{ store.state.distPath || '未导入' }}</span>
         </div>
         <div class="summary-item">
+          <span class="label">保存位置:</span>
+          <span class="value">{{ store.state.savePath || '未选择' }}</span>
+        </div>
+        <div class="summary-item">
           <span class="label">临时目录:</span>
           <span class="value">{{ store.state.tempPath || '未设置，使用当前导入目录' }}</span>
         </div>
@@ -135,6 +173,14 @@ function prevStep() {
             }}
           </span>
         </div>
+        <div class="summary-item">
+          <span class="label">发布平台:</span>
+          <span class="value">Windows</span>
+        </div>
+        <div class="summary-item">
+          <span class="label">签名脚本:</span>
+          <span class="value">{{ store.state.signPfxPath ? '生成（构建后双击运行）' : '不生成' }}</span>
+        </div>
       </div>
     </NCard>
 
@@ -155,6 +201,9 @@ function prevStep() {
           style="margin-bottom: 12px"
         />
         <p class="progress-text">{{ store.state.buildStep }}</p>
+        <NButton size="small" style="margin-top: 16px" :disabled="canceling" @click="cancelBuild">
+          取消构建
+        </NButton>
       </div>
     </NCard>
 
@@ -165,8 +214,18 @@ function prevStep() {
         :description="'输出路径: ' + store.state.outputPath"
       >
         <template #footer>
+          <NAlert
+            v-if="store.state.signScriptPath"
+            type="info"
+            style="margin-bottom: 16px; text-align: left"
+          >
+            签名脚本已生成: {{ store.state.signScriptPath }}，双击运行并输入证书密码即可完成签名。
+          </NAlert>
           <NSpace justify="center">
-            <NButton type="primary" @click="openOutput">
+            <NButton type="primary" @click="runOutput">
+              试运行
+            </NButton>
+            <NButton @click="openOutput">
               打开输出目录
             </NButton>
             <NButton @click="resetBuild">
@@ -181,15 +240,25 @@ function prevStep() {
       <div class="build-ready">
         <div class="ready-icon">🚀</div>
         <p>一切准备就绪，点击下方按钮开始构建</p>
-        <NSpace justify="center" style="margin-top: 16px">
+        <div class="save-path-box" :class="{ empty: !store.state.savePath }">
+          <div class="save-path-meta">
+            <span class="save-path-label">保存位置</span>
+            <NButton text type="primary" size="tiny" @click="selectSavePath">
+              {{ store.state.savePath ? '更改' : '选择位置' }}
+            </NButton>
+          </div>
+          <div class="save-path-value" :title="store.state.savePath">
+            {{ store.state.savePath || '尚未选择保存位置，点击右上角「选择位置」' }}
+          </div>
+        </div>
+        <NSpace justify="center" style="margin-top: 20px">
           <NButton @click="prevStep">上一步</NButton>
           <NButton
             type="primary"
             size="large"
             @click="startBuild"
-            :disabled="!store.state.distPath || !!isValidAppName(store.state.appName)"
-          >
-            开始构建
+            :disabled="!canBuild"
+          >            开始构建
           </NButton>
         </NSpace>
       </div>
@@ -255,5 +324,37 @@ function prevStep() {
   color: #666;
   font-size: 14px;
   margin: 0;
+}
+.save-path-box {
+  margin: 20px auto 0;
+  max-width: 560px;
+  text-align: left;
+  border: 1px solid #e5e6eb;
+  border-radius: 10px;
+  padding: 12px 16px;
+  background: #fafbfc;
+}
+
+.save-path-box.empty .save-path-value {
+  color: #b0b6bf;
+}
+
+.save-path-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.save-path-label {
+  font-size: 12px;
+  color: #8a919f;
+}
+
+.save-path-value {
+  font-size: 13px;
+  color: #333;
+  word-break: break-all;
+  line-height: 1.6;
 }
 </style>

@@ -1,4 +1,5 @@
-export function isValidAppName(name: string): string | null {
+// appNameError 校验应用名，合法时返回 null，否则返回可直接展示的错误信息
+export function appNameError(name: string): string | null {
   const trimmed = (name || '').trim()
   if (!trimmed) return '请输入应用名称'
   if ([...trimmed].length > 50) return '名称长度不能超过 50 个字符'
@@ -53,6 +54,6 @@ export function canEnterStep(step: number, state: {
 }): boolean {
   if (step <= 0) return true
   if (!state.distPath) return false
-  if (step >= 2 && isValidAppName(state.appName)) return false
+  if (step >= 2 && appNameError(state.appName)) return false
   return true
 }

@@ -28,8 +28,8 @@ func TestExtractZip_OK(t *testing.T) {
 	dir := t.TempDir()
 	zipPath := filepath.Join(dir, "ok.zip")
 	if err := writeTestZip(zipPath, map[string]string{
-		"index.html":   "<html></html>",
-		"assets/a.js":  "console.log(1)",
+		"index.html":  "<html></html>",
+		"assets/a.js": "console.log(1)",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -45,6 +45,49 @@ func TestExtractZip_OK(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dest, "assets", "a.js")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestExtractZip_FileCountLimit(t *testing.T) {
+	oldLimit := maxZipFiles
+	maxZipFiles = 1
+	defer func() { maxZipFiles = oldLimit }()
+
+	dir := t.TempDir()
+	zipPath := filepath.Join(dir, "many.zip")
+	if err := writeTestZip(zipPath, map[string]string{
+		"a.txt": "a",
+		"b.txt": "b",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(dir, "out")
+	if err := os.MkdirAll(dest, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := extractZip(zipPath, dest); err == nil {
+		t.Fatal("expected file count limit error")
+	}
+}
+
+func TestExtractZip_TotalSizeLimit(t *testing.T) {
+	oldLimit := maxZipTotalSize
+	maxZipTotalSize = 4
+	defer func() { maxZipTotalSize = oldLimit }()
+
+	dir := t.TempDir()
+	zipPath := filepath.Join(dir, "big.zip")
+	if err := writeTestZip(zipPath, map[string]string{
+		"index.html": "<html>too big</html>",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(dir, "out")
+	if err := os.MkdirAll(dest, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := extractZip(zipPath, dest); err == nil {
+		t.Fatal("expected total size limit error")
 	}
 }
 

@@ -24,14 +24,14 @@ type ProxyConfig struct {
 }
 
 type AppConfig struct {
-	Width        int    `json:"width"`
-	Height       int    `json:"height"`
-	Fullscreen   bool   `json:"fullscreen"`
-	Maximized    bool   `json:"maximized"`
-	ConfirmClose *bool  `json:"confirmClose"`
-	Version      string `json:"version"`
-	Description  string `json:"description"`
-	Company      string `json:"company"`
+	Width          int    `json:"width"`
+	Height         int    `json:"height"`
+	Fullscreen     bool   `json:"fullscreen"`
+	Maximized      bool   `json:"maximized"`
+	ConfirmClose   *bool  `json:"confirmClose"`
+	Title          string `json:"title"`
+	SingleInstance *bool  `json:"singleInstance"`
+	RememberWindow *bool  `json:"rememberWindow"`
 }
 
 func parseProxyConfig(data []byte) ProxyConfig {
@@ -69,6 +69,15 @@ func (c AppConfig) shouldConfirmClose() bool {
 	return *c.ConfirmClose
 }
 
+// 单实例与记住窗口位置默认开启，配置里显式为 false 时关闭
+func (c AppConfig) shouldSingleInstance() bool {
+	return c.SingleInstance == nil || *c.SingleInstance
+}
+
+func (c AppConfig) shouldRememberWindow() bool {
+	return c.RememberWindow == nil || *c.RememberWindow
+}
+
 func main() {
 	distFS, configBytes, err := loadResources()
 	if err != nil {
@@ -82,6 +91,12 @@ func main() {
 	exePath, _ := os.Executable()
 	appName := strings.TrimSuffix(filepath.Base(exePath), filepath.Ext(exePath))
 
+	// 窗口标题可独立于 exe 文件名配置
+	windowTitle := strings.TrimSpace(appCfg.Title)
+	if windowTitle == "" {
+		windowTitle = appName
+	}
+
 	mux := http.NewServeMux()
 	registerProxyRules(mux, proxyCfg.Rules)
 
@@ -89,20 +104,29 @@ func main() {
 	app.fullscreen = appCfg.Fullscreen
 	app.maximized = appCfg.Maximized
 	app.confirmCloseEnabled = appCfg.shouldConfirmClose()
+	app.rememberWindow = appCfg.shouldRememberWindow()
 
-	err = wails.Run(&options.App{
-		Title:  appName,
+	opts := &options.App{
+		Title:  windowTitle,
 		Width:  appCfg.Width,
 		Height: appCfg.Height,
 		AssetServer: &assetserver.Options{
-			Assets:  newSPAFS(distFS),
+			Assets:  NewSPA(distFS),
 			Handler: mux,
 		},
 		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 255},
 		OnStartup:        app.startup,
 		OnBeforeClose:    app.confirmClose,
 		Bind:             []interface{}{app},
-	})
+	}
+	if appCfg.shouldSingleInstance() {
+		opts.SingleInstanceLock = &options.SingleInstanceLock{
+			UniqueId:               "deploy-app-instance:" + appName,
+			OnSecondInstanceLaunch: app.onSecondInstanceLaunch,
+		}
+	}
+
+	err = wails.Run(opts)
 	if err != nil {
 		showErrorAndExit("启动失败: " + err.Error())
 	}

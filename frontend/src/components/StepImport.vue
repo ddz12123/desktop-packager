@@ -32,8 +32,11 @@ async function selectFolder() {
     // 获取目录信息（文件数量、大小等）
     const info = await GetDistInfo(path)
 
-    // 保存到全局状态
+    // 保存到全局状态；应用名为空时用 package.json 推断的名称填充
     store.setDist(info.path, info.fileCount, info.totalSize)
+    if (!store.state.appName && info.suggestedName) {
+      store.setAppName(info.suggestedName)
+    }
   } catch (e: any) {
     // 显示错误信息
     error.value = e?.message || String(e)
@@ -54,11 +57,12 @@ async function uploadZip() {
     const path = await UploadDistZip(store.state.tempPath)
     if (!path) return // 用户取消选择
 
-    // 获取解压后的目录信息
+    // 获取解压后的目录信息；应用名为空时同样尝试用 package.json 预填
     const info = await GetDistInfo(path)
-
-    // 保存到全局状态
     store.setDist(info.path, info.fileCount, info.totalSize)
+    if (!store.state.appName && info.suggestedName) {
+      store.setAppName(info.suggestedName)
+    }
   } catch (e: any) {
     // 显示错误信息
     error.value = e?.message || String(e)

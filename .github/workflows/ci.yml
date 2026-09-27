@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: Go 测试与静态检查
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test ./...
+
+  frontend:
+    name: 前端构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: npm ci
+        working-directory: frontend
+        run: npm ci
+      - name: npm run build
+        working-directory: frontend
+        run: npm run build
+
+  base-shell:
+    name: base.exe 与模板一致性
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: 重新生成 base.exe
+        run: go run ./cmd/build-base
+      # 仅比对源文件哈希清单：base.exe 二进制受 Go 版本影响，跨环境不具备可复现性，
+      # 比对二进制会误报；二进制与清单的一致性由同一次 build-base 运行保证。
+      - name: 校验 base_version.txt 未漂移
+        shell: bash
+        run: |
+          if ! git diff --exit-code -- templates/base/base_version.txt; then
+            echo "::error::模板或共享源码已修改但 templates/base/base.exe 未重新生成，请本地执行: go run ./cmd/build-base"
+            exit 1
+          fi

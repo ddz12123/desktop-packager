@@ -9,112 +9,6 @@ import (
 	"time"
 )
 
-func joinURLPath(a, b string) string {
-	if a == "" {
-		return b
-	}
-	if b == "" {
-		return a
-	}
-	aSlash := strings.HasSuffix(a, "/")
-	bSlash := strings.HasPrefix(b, "/")
-	switch {
-	case aSlash && bSlash:
-		return a + b[1:]
-	case !aSlash && !bSlash:
-		return a + "/" + b
-	default:
-		return a + b
-	}
-}
-
-func matchLocation(location, requestPath string) bool {
-	if location == "" || requestPath == "" {
-		return false
-	}
-	if !strings.HasPrefix(location, "/") {
-		location = "/" + location
-	}
-	if strings.HasSuffix(location, "/") {
-		trimmed := strings.TrimSuffix(location, "/")
-		return requestPath == trimmed || strings.HasPrefix(requestPath, location) || requestPath == location
-	}
-	return requestPath == location || strings.HasPrefix(requestPath, location+"/")
-}
-
-func locationRemainder(location, requestPath string) string {
-	if !matchLocation(location, requestPath) {
-		return ""
-	}
-	if !strings.HasPrefix(location, "/") {
-		location = "/" + location
-	}
-	if strings.HasSuffix(location, "/") {
-		trimmed := strings.TrimSuffix(location, "/")
-		if requestPath == trimmed || requestPath == location {
-			return ""
-		}
-		if strings.HasPrefix(requestPath, location) {
-			return requestPath[len(location):]
-		}
-		return ""
-	}
-	if requestPath == location {
-		return ""
-	}
-	if strings.HasPrefix(requestPath, location) {
-		return requestPath[len(location):]
-	}
-	return ""
-}
-
-func resolveUpstreamPath(location, requestPath, targetPath, rewrite string) string {
-	if location == "" {
-		return requestPath
-	}
-	if !strings.HasPrefix(location, "/") {
-		location = "/" + location
-	}
-
-	replacement := ""
-	useReplace := false
-	if strings.TrimSpace(rewrite) != "" {
-		useReplace = true
-		replacement = rewrite
-		if !strings.HasPrefix(replacement, "/") {
-			replacement = "/" + replacement
-		}
-	} else if targetPath != "" {
-		// Non-empty path (including "/") means proxy_pass was given a URI.
-		useReplace = true
-		replacement = targetPath
-	}
-
-	if !useReplace {
-		return requestPath
-	}
-
-	remainder := locationRemainder(location, requestPath)
-	if remainder == "" {
-		if replacement == "" {
-			return "/"
-		}
-		return replacement
-	}
-	return joinURLPath(replacement, remainder)
-}
-
-func normalizeLocation(location string) string {
-	location = strings.TrimSpace(location)
-	if location == "" {
-		return ""
-	}
-	if !strings.HasPrefix(location, "/") {
-		location = "/" + location
-	}
-	return location
-}
-
 func newProxyTransport() http.RoundTripper {
 	return &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -131,12 +25,15 @@ func newProxyTransport() http.RoundTripper {
 	}
 }
 
+// registerProxyRules 按 nginx location + proxy_pass 语义注册代理规则。
+// 路径算法（MatchLocation / ResolveUpstreamPath / NormalizeLocation）由
+// cmd/build-base 从 internal/nginxproxy 复制进来，与打包工具共用同一份实现。
 func registerProxyRules(mux *http.ServeMux, rules []ProxyRule) {
 	for _, rule := range rules {
 		if !rule.Enabled {
 			continue
 		}
-		location := normalizeLocation(rule.Path)
+		location := NormalizeLocation(rule.Path)
 		if location == "" {
 			continue
 		}
@@ -162,7 +59,7 @@ func registerProxyRules(mux *http.ServeMux, rules []ProxyRule) {
 				originalHost = req.Header.Get("Host")
 			}
 
-			outPath := resolveUpstreamPath(loc, req.URL.Path, targetURL.Path, rewrite)
+			outPath := ResolveUpstreamPath(loc, req.URL.Path, targetURL.Path, rewrite)
 			req.URL.Scheme = targetURL.Scheme
 			req.URL.Host = targetURL.Host
 			req.URL.Path = outPath
@@ -208,7 +105,7 @@ func registerProxyRules(mux *http.ServeMux, rules []ProxyRule) {
 		}
 
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !matchLocation(loc, r.URL.Path) {
+			if !MatchLocation(loc, r.URL.Path) {
 				http.NotFound(w, r)
 				return
 			}

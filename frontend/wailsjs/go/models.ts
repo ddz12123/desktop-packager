@@ -1,4 +1,4 @@
-export namespace main {
+export namespace appconf {
 	
 	export class ProxyRule {
 	    path: string;
@@ -22,6 +22,7 @@ export namespace main {
 	    appName: string;
 	    iconPath: string;
 	    distPath: string;
+	    outputPath: string;
 	    tempPath: string;
 	    proxyRules: ProxyRule[];
 	    windowWidth: number;
@@ -32,6 +33,12 @@ export namespace main {
 	    version: string;
 	    description: string;
 	    company: string;
+	    windowTitle: string;
+	    singleInstance: boolean;
+	    rememberWindow: boolean;
+	    targetPlatform: string;
+	    signPfxPath: string;
+	    signTimestamp: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new BuildConfig(source);
@@ -42,6 +49,7 @@ export namespace main {
 	        this.appName = source["appName"];
 	        this.iconPath = source["iconPath"];
 	        this.distPath = source["distPath"];
+	        this.outputPath = source["outputPath"];
 	        this.tempPath = source["tempPath"];
 	        this.proxyRules = this.convertValues(source["proxyRules"], ProxyRule);
 	        this.windowWidth = source["windowWidth"];
@@ -52,6 +60,12 @@ export namespace main {
 	        this.version = source["version"];
 	        this.description = source["description"];
 	        this.company = source["company"];
+	        this.windowTitle = source["windowTitle"];
+	        this.singleInstance = source["singleInstance"];
+	        this.rememberWindow = source["rememberWindow"];
+	        this.targetPlatform = source["targetPlatform"];
+	        this.signPfxPath = source["signPfxPath"];
+	        this.signTimestamp = source["signTimestamp"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -77,6 +91,7 @@ export namespace main {
 	    fileCount: number;
 	    totalSize: number;
 	    valid: boolean;
+	    suggestedName: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new DistInfo(source);
@@ -88,6 +103,32 @@ export namespace main {
 	        this.fileCount = source["fileCount"];
 	        this.totalSize = source["totalSize"];
 	        this.valid = source["valid"];
+	        this.suggestedName = source["suggestedName"];
+	    }
+	}
+
+}
+
+export namespace selfupdate {
+	
+	export class Info {
+	    hasUpdate: boolean;
+	    currentVersion: string;
+	    latestVersion: string;
+	    notesUrl: string;
+	    downloadUrl: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Info(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hasUpdate = source["hasUpdate"];
+	        this.currentVersion = source["currentVersion"];
+	        this.latestVersion = source["latestVersion"];
+	        this.notesUrl = source["notesUrl"];
+	        this.downloadUrl = source["downloadUrl"];
 	    }
 	}
 
