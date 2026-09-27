@@ -5,9 +5,5 @@
   "frontend:install": "npm install",
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",
-  "frontend:dev:serverUrl": "http://localhost:5173",
-  "author": {
-    "name": "shifuhui",
-    "email": "1769096110@qq.com"
-  }
+  "frontend:dev:serverUrl": "http://localhost:5173"
 }

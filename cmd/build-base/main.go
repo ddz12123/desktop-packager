@@ -144,8 +144,10 @@ func main() {
 	}
 
 	// 编译生成 base.exe
+	// -trimpath：移除二进制中嵌入的本机构建路径（含用户名），避免个人信息泄漏
 	fmt.Println("编译 base.exe...")
 	cmd = exec.Command("go", "build",
+		"-trimpath",
 		"-tags", "production", // 生产环境标签
 		"-ldflags", "-w -s -H windowsgui", // 去掉调试信息，隐藏控制台窗口
 		"-o", outputExe, // 输出文件路径

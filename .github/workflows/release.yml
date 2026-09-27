@@ -65,8 +65,9 @@ jobs:
           MS="$(command -v makensis || echo 'C:/Program Files (x86)/NSIS/makensis.exe')"
           echo "makensis: $MS"
           VERSION="${GITHUB_REF_NAME#v}"
-          EXE_WIN="$(cygpath -w build/bin/deploy-app.exe)"
-          OUT_WIN="$(cygpath -w "dist-release/deploy-app-v${VERSION}-setup.exe")"
+          EXE_WIN="$(cygpath -w "$(pwd)/build/bin/deploy-app.exe")"
+          OUT_WIN="$(cygpath -w "$(pwd)/dist-release/deploy-app-v${VERSION}-setup.exe")"
+          mkdir -p dist-release
           "$MS" -V2 -DVERSION="$VERSION" -DEXE="$EXE_WIN" -DOUT="$OUT_WIN" packaging/deploy-app.nsi
 
       - name: 发布到 GitHub Releases
